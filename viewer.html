@@ -13,18 +13,22 @@
     font-family: 'Georgia', serif;
     line-height: 1.85;
     font-size: 16px;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   #toolbar {
-    position: fixed;
-    top: 0; left: 0; right: 0;
+    height: 56px;
     background: #111115;
     border-bottom: 1px solid #2e2e3a;
-    padding: 12px 24px;
+    padding: 0 24px;
     display: flex;
     align-items: center;
     gap: 12px;
     z-index: 100;
+    flex-shrink: 0;
   }
 
   #toolbar h1 {
@@ -35,10 +39,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  #file-input {
-    display: none;
   }
 
   .btn {
@@ -54,18 +54,58 @@
   }
   .btn:hover { background: #35354a; }
   .btn.primary { background: #404070; border-color: #6060a0; color: #fff; }
-  .btn.primary:hover { background: #505090; }
 
-  #stats {
-    font-size: 12px;
-    color: #555;
-    white-space: nowrap;
+  #layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
   }
 
-  #main {
+  #sidebar {
+    width: 280px;
+    background: #141418;
+    border-right: 1px solid #2e2e3a;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  #sidebar-header {
+    padding: 16px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #555;
+    border-bottom: 1px solid #22222a;
+  }
+
+  #session-list {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .session-item {
+    padding: 14px 16px;
+    border-bottom: 1px solid #1e1e24;
+    cursor: pointer;
+    font-size: 13px;
+    color: #888;
+    transition: all 0.2s;
+  }
+  .session-item:hover { background: #1e1e24; color: #c0b8a8; }
+  .session-item.active { background: #252530; color: #e0d6c8; border-left: 3px solid #6060a0; }
+
+  #content-area {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+    padding: 40px 0;
+  }
+
+  #main-container {
     max-width: 760px;
     margin: 0 auto;
-    padding: 80px 24px 80px;
+    padding: 0 24px;
   }
 
   #drop-zone {
@@ -74,112 +114,56 @@
     padding: 100px 24px;
     text-align: center;
     color: #555;
-    margin-top: 20px;
-    transition: border-color 0.2s;
+    margin-top: 40px;
   }
   #drop-zone.dragover { border-color: #6060a0; color: #8080c0; }
-  #drop-zone p { margin-bottom: 12px; font-size: 18px; }
 
-  .session-container {
-    margin-bottom: 80px;
-    position: relative;
-  }
-
-  .session-header {
-    text-align: center;
-    border-bottom: 2px solid #3a3a48;
-    padding: 20px 0;
-    margin-bottom: 40px;
-    color: #6060a0;
-    font-weight: bold;
-    letter-spacing: 0.2em;
-    font-size: 14px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 20px;
-  }
-
-  .message {
-    margin-bottom: 32px;
-    padding-bottom: 32px;
-    border-bottom: 1px solid #22222a;
-  }
+  .message { margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid #22222a; }
   .message:last-child { border-bottom: none; }
-
-  .message.char .content {
-    color: #e0d6c8;
-  }
-
-  .message.user .content {
-    color: #b0c4a8;
-    background: #1e2420;
-    border-left: 3px solid #4a6a48;
-    padding: 12px 16px;
-    border-radius: 0 4px 4px 0;
-  }
-
-  .message .content p {
-    margin-bottom: 1em;
-  }
+  .message.user .content { color: #b0c4a8; background: #1e2420; border-left: 3px solid #4a6a48; padding: 12px 16px; border-radius: 0 4px 4px 0; }
+  .message .content p { margin-bottom: 1em; }
   .message .content p:last-child { margin-bottom: 0; }
-
-  .message .meta {
-    font-size: 11px;
-    color: #444;
-    margin-bottom: 8px;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  }
-
-  .meta .role-badge {
-    padding: 1px 7px;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: bold;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
+  .message .meta { font-size: 11px; color: #444; margin-bottom: 8px; display: flex; gap: 10px; align-items: center; }
+  .meta .role-badge { padding: 1px 7px; border-radius: 3px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
   .char .role-badge { background: #2a2040; color: #9080c0; }
   .user .role-badge { background: #1a2a1a; color: #5a8a5a; }
-
-  .meta .model-info { color: #3a3a50; }
-
   em { font-style: italic; color: #c8b890; }
   strong { font-weight: bold; }
-
-  #no-content {
-    text-align: center;
-    color: #444;
-    padding: 40px;
-    display: none;
-  }
+  
+  #file-input { display: none; }
 </style>
 </head>
 <body>
 
 <div id="toolbar">
   <h1 id="file-title">RisuAI Chat Viewer & Extractor</h1>
-  <span id="stats"></span>
   <button id="btn-save-all" class="btn primary" style="display:none;" onclick="saveAllMarkdown()">💾 전체 저장 (.zip)</button>
+  <button id="btn-save-current" class="btn" style="display:none;" onclick="saveActiveSession()">💾 현재 세션 저장</button>
   <button class="btn" onclick="document.getElementById('file-input').click()">📂 JSON 열기</button>
   <input type="file" id="file-input" accept=".json">
 </div>
 
-<div id="main">
-  <div id="drop-zone">
-    <p>RisuAI JSON 파일을 여기에 드래그하세요</p>
-    <button class="btn" onclick="document.getElementById('file-input').click()">또는 파일 선택</button>
+<div id="layout">
+  <div id="sidebar" style="display:none;">
+    <div id="sidebar-header">Sessions</div>
+    <div id="session-list"></div>
   </div>
-  <div id="messages"></div>
-  <div id="no-content">메시지가 없습니다.</div>
+  <div id="content-area">
+    <div id="main-container">
+      <div id="drop-zone">
+        <p>RisuAI JSON 파일을 여기에 드래그하세요</p>
+        <button class="btn" onclick="document.getElementById('file-input').click()" style="margin-top:20px;">또는 파일 선택</button>
+      </div>
+      <div id="messages"></div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 let currentData = null;
 let currentFileName = "";
+let activeIndex = 0;
 
 function cleanText(text) {
   if (!text) return "";
@@ -194,109 +178,66 @@ function toHtml(text) {
   text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  const paras = text.split(/\n{2,}/);
-  return paras.map(p => `<p>${p.trim().replace(/\n/g, '<br>')}</p>`).join('');
+  return text.split(/\n{2,}/).map(p => `<p>${p.trim().replace(/\n/g, '<br>')}</p>`).join('');
 }
 
-function render(data) {
-  const container = document.getElementById('messages');
-  const dropZone  = document.getElementById('drop-zone');
-  const noContent = document.getElementById('no-content');
-  const saveBtn   = document.getElementById('btn-save-all');
-  
-  container.innerHTML = '';
-  dropZone.style.display = 'none';
-  saveBtn.style.display = 'block';
-
-  const chats = data.data || [];
-  let totalMessages = 0;
-
-  chats.forEach((session, i) => {
-    const messages = session.message || [];
-    if (messages.length === 0) return;
-
-    const sessionDiv = document.createElement('div');
-    sessionDiv.className = 'session-container';
-
-    const header = document.createElement('div');
-    header.className = 'session-header';
-    
-    const title = document.createElement('span');
-    title.textContent = `SESSION ${i + 1}`;
-    header.appendChild(title);
-
-    const individualSaveBtn = document.createElement('button');
-    individualSaveBtn.className = 'btn';
-    individualSaveBtn.textContent = '💾 이 세션만 저장';
-    individualSaveBtn.onclick = () => saveSessionMarkdown(i);
-    header.appendChild(individualSaveBtn);
-
-    sessionDiv.appendChild(header);
-
-    messages.forEach(msg => {
-      const role = msg.role || 'user';
-      const content = cleanText(msg.data);
-      if (!content) return;
-
-      totalMessages++;
-      const div = document.createElement('div');
-      div.className = `message ${role}`;
-      const time = msg.time ? new Date(msg.time).toLocaleString('ko-KR') : '';
-      const model = msg.generationInfo?.model || '';
-      div.innerHTML = `
-        <div class="meta">
-          <span class="role-badge">${role === 'char' ? 'Char' : 'User'}</span>
-          ${time ? `<span>${time}</span>` : ''}
-          ${model ? `<span class="model-info">${model}</span>` : ''}
-        </div>
-        <div class="content">${toHtml(content)}</div>
-      `;
-      sessionDiv.appendChild(div);
-    });
-    
-    container.appendChild(sessionDiv);
+function renderSidebar() {
+  const list = document.getElementById('session-list');
+  list.innerHTML = '';
+  currentData.data.forEach((session, i) => {
+    const div = document.createElement('div');
+    div.className = `session-item ${i === activeIndex ? 'active' : ''}`;
+    // Get summary or first few words of first message
+    const firstMsg = session.message.find(m => m.data)?.data || "";
+    const preview = cleanText(firstMsg).substring(0, 30) + "...";
+    div.innerHTML = `<div style="font-weight:bold;margin-bottom:4px;">Session ${i + 1}</div><div style="font-size:11px;opacity:0.6;">${preview}</div>`;
+    div.onclick = () => { activeIndex = i; renderSidebar(); renderActiveSession(); };
+    list.appendChild(div);
   });
-
-  document.getElementById('stats').textContent = `${totalMessages}개 메시지`;
-  if (totalMessages === 0) {
-    noContent.style.display = 'block';
-    saveBtn.style.display = 'none';
-  }
+  document.getElementById('sidebar').style.display = 'flex';
 }
 
-function getSessionMarkdown(index) {
-  const session = currentData.data[index];
-  const messages = session.message || [];
-  return messages.map(msg => cleanText(msg.data)).filter(Boolean).join('\n\n');
+function renderActiveSession() {
+  const container = document.getElementById('messages');
+  container.innerHTML = '';
+  const messages = currentData.data[activeIndex].message || [];
+  
+  messages.forEach(msg => {
+    const role = msg.role || 'user';
+    const content = cleanText(msg.data);
+    if (!content) return;
+    const div = document.createElement('div');
+    div.className = `message ${role}`;
+    const time = msg.time ? new Date(msg.time).toLocaleString('ko-KR') : '';
+    const model = msg.generationInfo?.model || '';
+    div.innerHTML = `<div class="meta"><span class="role-badge">${role === 'char' ? 'Char' : 'User'}</span>${time ? `<span>${time}</span>` : ''}${model ? `<span class="model-info">${model}</span>` : ''}</div><div class="content">${toHtml(content)}</div>`;
+    container.appendChild(div);
+  });
+  document.getElementById('content-area').scrollTop = 0;
 }
 
-function saveSessionMarkdown(index) {
-  const content = getSessionMarkdown(index);
+function saveActiveSession() {
+  const content = currentData.data[activeIndex].message.map(msg => cleanText(msg.data)).filter(Boolean).join('\n\n');
   const blob = new Blob([content], { type: "text/markdown" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${currentFileName.replace(/\.json$/i, "")}_session_${index + 1}.md`;
+  a.download = `${currentFileName.replace(/\.json$/i, "")}_session_${activeIndex + 1}.md`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
 async function saveAllMarkdown() {
   const zip = new JSZip();
-  const baseName = currentFileName.replace(/\.json$/i, "");
-  
   currentData.data.forEach((session, i) => {
-    const content = getSessionMarkdown(i);
-    if (content) {
-      zip.file(`${baseName}_session_${i + 1}.md`, content);
-    }
+    const content = session.message.map(msg => cleanText(msg.data)).filter(Boolean).join('\n\n');
+    if (content) zip.file(`${currentFileName.replace(/\.json$/i, "")}_session_${i + 1}.md`, content);
   });
-
   const blob = await zip.generateAsync({ type: "blob" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${baseName}_all_sessions.zip`;
+  a.download = `${currentFileName.replace(/\.json$/i, "")}_all.zip`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -308,18 +249,18 @@ function loadFile(file) {
   reader.onload = e => {
     try {
       currentData = JSON.parse(e.target.result);
-      render(currentData);
-    } catch {
-      alert('JSON 파싱 오류.');
-    }
+      activeIndex = 0;
+      document.getElementById('drop-zone').style.display = 'none';
+      document.getElementById('btn-save-all').style.display = 'block';
+      document.getElementById('btn-save-current').style.display = 'block';
+      renderSidebar();
+      renderActiveSession();
+    } catch { alert('JSON 파싱 오류.'); }
   };
   reader.readAsText(file, 'utf-8');
 }
 
-document.getElementById('file-input').addEventListener('change', e => {
-  if (e.target.files[0]) loadFile(e.target.files[0]);
-});
-
+document.getElementById('file-input').addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
 document.body.addEventListener('dragover', e => { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); });
 document.body.addEventListener('dragleave', () => document.getElementById('drop-zone').classList.remove('dragover'));
 document.body.addEventListener('drop', e => {
