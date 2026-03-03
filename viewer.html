@@ -78,6 +78,17 @@
   #drop-zone.dragover { border-color: #6060a0; color: #8080c0; }
   #drop-zone p { margin-bottom: 12px; }
 
+  .session-header {
+    text-align: center;
+    border-bottom: 2px solid #3a3a48;
+    padding: 20px 0;
+    margin: 60px 0 40px;
+    color: #6060a0;
+    font-weight: bold;
+    letter-spacing: 0.2em;
+    font-size: 14px;
+  }
+
   .message {
     margin-bottom: 32px;
     padding-bottom: 32px;
@@ -154,10 +165,13 @@
 </div>
 
 <script>
-// ── strip A/B/P/☠ block ──────────────────────────────────────────────────────
+// ── strip A/B/P/☠ block and XML tags ─────────────────────────────────────────
 function stripHeader(text) {
   // Remove <details>...</details>
   text = text.replace(/<details>[\s\S]*?<\/details>/g, '');
+  // Remove XML-like tags (keep narrative content, strip others)
+  text = text.replace(/<\/?narrative>/g, '');
+  text = text.replace(/<(psyche-status|world-info|summary|details)>[\s\S]*?<\/\1>/g, '');
   // Remove leading --- separator
   text = text.replace(/^\s*---\s*\n/, '');
   return text.trim();
@@ -196,13 +210,20 @@ function render(data) {
   const chats = data.data || [];
   let total = 0;
 
-  for (const session of chats) {
+  chats.forEach((session, i) => {
+    if (chats.length > 1) {
+      const header = document.createElement('div');
+      header.className = 'session-header';
+      header.textContent = `SESSION ${i + 1}`;
+      container.appendChild(header);
+    }
+
     const messages = session.message || [];
-    for (const msg of messages) {
+    messages.forEach(msg => {
       const role    = msg.role || 'user';
       const raw     = msg.data || '';
       const content = role === 'char' ? stripHeader(raw) : raw.trim();
-      if (!content) continue;
+      if (!content) return;
 
       total++;
       const div = document.createElement('div');
@@ -220,8 +241,8 @@ function render(data) {
         <div class="content">${toHtml(content)}</div>
       `;
       container.appendChild(div);
-    }
-  }
+    });
+  });
 
   document.getElementById('stats').textContent =
     total ? `${total}개 메시지` : '';
