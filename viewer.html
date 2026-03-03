@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RisuAI Chat Viewer</title>
+<title>RisuAI Chat Viewer & Extractor</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -53,6 +53,8 @@
     white-space: nowrap;
   }
   .btn:hover { background: #35354a; }
+  .btn.primary { background: #404070; border-color: #6060a0; color: #fff; }
+  .btn.primary:hover { background: #505090; }
 
   #stats {
     font-size: 12px;
@@ -69,14 +71,14 @@
   #drop-zone {
     border: 2px dashed #3a3a48;
     border-radius: 8px;
-    padding: 60px 24px;
+    padding: 100px 24px;
     text-align: center;
     color: #555;
     margin-top: 20px;
     transition: border-color 0.2s;
   }
   #drop-zone.dragover { border-color: #6060a0; color: #8080c0; }
-  #drop-zone p { margin-bottom: 12px; }
+  #drop-zone p { margin-bottom: 12px; font-size: 18px; }
 
   .session-header {
     text-align: center;
@@ -149,24 +151,29 @@
 <body>
 
 <div id="toolbar">
-  <h1 id="file-title">RisuAI Chat Viewer — 파일을 열어주세요</h1>
+  <h1 id="file-title">RisuAI Chat Viewer & Extractor</h1>
   <span id="stats"></span>
+  <button id="btn-save-md" class="btn primary" style="display:none;" onclick="saveAsMarkdown()">💾 MD로 저장</button>
   <button class="btn" onclick="document.getElementById('file-input').click()">📂 JSON 열기</button>
   <input type="file" id="file-input" accept=".json">
 </div>
 
 <div id="main">
   <div id="drop-zone">
-    <p>여기에 RisuAI JSON 파일을 드래그하거나</p>
-    <button class="btn" onclick="document.getElementById('file-input').click()">파일 선택</button>
+    <p>RisuAI JSON 파일을 여기에 드래그하세요</p>
+    <button class="btn" onclick="document.getElementById('file-input').click()">또는 파일 선택</button>
   </div>
   <div id="messages"></div>
   <div id="no-content">메시지가 없습니다.</div>
 </div>
 
 <script>
+let currentData = null;
+let currentFileName = "";
+
 // ── strip A/B/P/☠ block and XML tags ─────────────────────────────────────────
-function stripHeader(text) {
+function cleanText(text) {
+  if (!text) return "";
   // Remove <details>...</details>
   text = text.replace(/<details>[\s\S]*?<\/details>/g, '');
   // Remove XML-like tags (keep narrative content, strip others)
@@ -204,8 +211,11 @@ function render(data) {
   const container = document.getElementById('messages');
   const dropZone  = document.getElementById('drop-zone');
   const noContent = document.getElementById('no-content');
+  const saveBtn   = document.getElementById('btn-save-md');
+  
   container.innerHTML = '';
   dropZone.style.display = 'none';
+  saveBtn.style.display = 'block';
 
   const chats = data.data || [];
   let total = 0;
@@ -222,7 +232,7 @@ function render(data) {
     messages.forEach(msg => {
       const role    = msg.role || 'user';
       const raw     = msg.data || '';
-      const content = role === 'char' ? stripHeader(raw) : raw.trim();
+      const content = cleanText(raw);
       if (!content) return;
 
       total++;
@@ -247,17 +257,54 @@ function render(data) {
   document.getElementById('stats').textContent =
     total ? `${total}개 메시지` : '';
 
-  if (total === 0) noContent.style.display = 'block';
+  if (total === 0) {
+    noContent.style.display = 'block';
+    saveBtn.style.display = 'none';
+  }
+}
+
+// ── save as markdown ─────────────────────────────────────────────────────────
+function saveAsMarkdown() {
+  if (!currentData) return;
+  
+  const chats = currentData.data || [];
+  let output = "";
+
+  chats.forEach((session, i) => {
+    if (chats.length > 1) {
+      output += `--- SESSION ${i + 1} ---\n\n`;
+    }
+    const messages = session.message || [];
+    messages.forEach(msg => {
+      const role = msg.role || 'user';
+      const content = cleanText(msg.data);
+      if (content) {
+        output += content + "\n\n";
+      }
+    });
+    output += "\n";
+  });
+
+  const blob = new Blob([output.trim()], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = currentFileName.replace(/\.json$/i, "") + ".md";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── file loading ──────────────────────────────────────────────────────────────
 function loadFile(file) {
+  currentFileName = file.name;
   document.getElementById('file-title').textContent = file.name;
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const data = JSON.parse(e.target.result);
-      render(data);
+      currentData = JSON.parse(e.target.result);
+      render(currentData);
     } catch {
       alert('JSON 파싱 오류. 올바른 RisuAI 내보내기 파일인지 확인해주세요.');
     }
