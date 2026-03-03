@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RisuAI Chat Viewer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #1a1a1f;
+    color: #e0d6c8;
+    font-family: 'Georgia', serif;
+    line-height: 1.85;
+    font-size: 16px;
+  }
+
+  #toolbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: #111115;
+    border-bottom: 1px solid #2e2e3a;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 100;
+  }
+
+  #toolbar h1 {
+    font-size: 14px;
+    font-weight: normal;
+    color: #888;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #file-input {
+    display: none;
+  }
+
+  .btn {
+    background: #2a2a35;
+    border: 1px solid #3a3a48;
+    color: #c0b8a8;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: #35354a; }
+
+  #stats {
+    font-size: 12px;
+    color: #555;
+    white-space: nowrap;
+  }
+
+  #main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 80px 24px 80px;
+  }
+
+  #drop-zone {
+    border: 2px dashed #3a3a48;
+    border-radius: 8px;
+    padding: 60px 24px;
+    text-align: center;
+    color: #555;
+    margin-top: 20px;
+    transition: border-color 0.2s;
+  }
+  #drop-zone.dragover { border-color: #6060a0; color: #8080c0; }
+  #drop-zone p { margin-bottom: 12px; }
+
+  .message {
+    margin-bottom: 32px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid #22222a;
+  }
+  .message:last-child { border-bottom: none; }
+
+  .message.char .content {
+    color: #e0d6c8;
+  }
+
+  .message.user .content {
+    color: #b0c4a8;
+    background: #1e2420;
+    border-left: 3px solid #4a6a48;
+    padding: 12px 16px;
+    border-radius: 0 4px 4px 0;
+  }
+
+  .message .content p {
+    margin-bottom: 1em;
+  }
+  .message .content p:last-child { margin-bottom: 0; }
+
+  .message .meta {
+    font-size: 11px;
+    color: #444;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .meta .role-badge {
+    padding: 1px 7px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .char .role-badge { background: #2a2040; color: #9080c0; }
+  .user .role-badge { background: #1a2a1a; color: #5a8a5a; }
+
+  .meta .model-info { color: #3a3a50; }
+
+  em { font-style: italic; color: #c8b890; }
+  strong { font-weight: bold; }
+
+  #no-content {
+    text-align: center;
+    color: #444;
+    padding: 40px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1 id="file-title">RisuAI Chat Viewer — 파일을 열어주세요</h1>
+  <span id="stats"></span>
+  <button class="btn" onclick="document.getElementById('file-input').click()">📂 JSON 열기</button>
+  <input type="file" id="file-input" accept=".json">
+</div>
+
+<div id="main">
+  <div id="drop-zone">
+    <p>여기에 RisuAI JSON 파일을 드래그하거나</p>
+    <button class="btn" onclick="document.getElementById('file-input').click()">파일 선택</button>
+  </div>
+  <div id="messages"></div>
+  <div id="no-content">메시지가 없습니다.</div>
+</div>
+
+<script>
+// ── strip A/B/P/☠ block ──────────────────────────────────────────────────────
+function stripHeader(text) {
+  // Remove <details>...</details>
+  text = text.replace(/<details>[\s\S]*?<\/details>/g, '');
+  // Remove leading --- separator
+  text = text.replace(/^\s*---\s*\n/, '');
+  return text.trim();
+}
+
+// ── plain text → simple HTML (preserve line breaks, italics via *…*) ─────────
+function toHtml(text) {
+  // Escape HTML entities first
+  text = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Bold **…**
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Italic *…*
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Split into paragraphs by blank lines
+  const paras = text.split(/\n{2,}/);
+  return paras
+    .map(p => p.trim())
+    .filter(Boolean)
+    .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+// ── render messages ───────────────────────────────────────────────────────────
+function render(data) {
+  const container = document.getElementById('messages');
+  const dropZone  = document.getElementById('drop-zone');
+  const noContent = document.getElementById('no-content');
+  container.innerHTML = '';
+  dropZone.style.display = 'none';
+
+  const chats = data.data || [];
+  let total = 0;
+
+  for (const session of chats) {
+    const messages = session.message || [];
+    for (const msg of messages) {
+      const role    = msg.role || 'user';
+      const raw     = msg.data || '';
+      const content = role === 'char' ? stripHeader(raw) : raw.trim();
+      if (!content) continue;
+
+      total++;
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+
+      // meta line
+      const time  = msg.time ? new Date(msg.time).toLocaleString('ko-KR') : '';
+      const model = msg.generationInfo?.model || '';
+      div.innerHTML = `
+        <div class="meta">
+          <span class="role-badge">${role === 'char' ? 'Char' : 'User'}</span>
+          ${time ? `<span>${time}</span>` : ''}
+          ${model ? `<span class="model-info">${model}</span>` : ''}
+        </div>
+        <div class="content">${toHtml(content)}</div>
+      `;
+      container.appendChild(div);
+    }
+  }
+
+  document.getElementById('stats').textContent =
+    total ? `${total}개 메시지` : '';
+
+  if (total === 0) noContent.style.display = 'block';
+}
+
+// ── file loading ──────────────────────────────────────────────────────────────
+function loadFile(file) {
+  document.getElementById('file-title').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      render(data);
+    } catch {
+      alert('JSON 파싱 오류. 올바른 RisuAI 내보내기 파일인지 확인해주세요.');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+// drag & drop
+const dropZone = document.getElementById('drop-zone');
+document.body.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+document.body.addEventListener('dragleave', () => {
+  dropZone.classList.remove('dragover');
+});
+document.body.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+</script>
+</body>
+</html>
