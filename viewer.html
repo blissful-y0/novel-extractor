@@ -80,15 +80,24 @@
   #drop-zone.dragover { border-color: #6060a0; color: #8080c0; }
   #drop-zone p { margin-bottom: 12px; font-size: 18px; }
 
+  .session-container {
+    margin-bottom: 80px;
+    position: relative;
+  }
+
   .session-header {
     text-align: center;
     border-bottom: 2px solid #3a3a48;
     padding: 20px 0;
-    margin: 60px 0 40px;
+    margin-bottom: 40px;
     color: #6060a0;
     font-weight: bold;
     letter-spacing: 0.2em;
     font-size: 14px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
   }
 
   .message {
@@ -153,7 +162,7 @@
 <div id="toolbar">
   <h1 id="file-title">RisuAI Chat Viewer & Extractor</h1>
   <span id="stats"></span>
-  <button id="btn-save-md" class="btn primary" style="display:none;" onclick="saveAsMarkdown()">💾 MD로 저장</button>
+  <button id="btn-save-all" class="btn primary" style="display:none;" onclick="saveAllMarkdown()">💾 전체 저장 (.zip)</button>
   <button class="btn" onclick="document.getElementById('file-input').click()">📂 JSON 열기</button>
   <input type="file" id="file-input" accept=".json">
 </div>
@@ -167,80 +176,72 @@
   <div id="no-content">메시지가 없습니다.</div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 let currentData = null;
 let currentFileName = "";
 
-// ── strip A/B/P/☠ block and XML tags ─────────────────────────────────────────
 function cleanText(text) {
   if (!text) return "";
-  // Remove <details>...</details>
   text = text.replace(/<details>[\s\S]*?<\/details>/g, '');
-  // Remove XML-like tags (keep narrative content, strip others)
   text = text.replace(/<\/?narrative>/g, '');
   text = text.replace(/<(psyche-status|world-info|summary|details)>[\s\S]*?<\/\1>/g, '');
-  // Remove leading --- separator
   text = text.replace(/^\s*---\s*\n/, '');
   return text.trim();
 }
 
-// ── plain text → simple HTML (preserve line breaks, italics via *…*) ─────────
 function toHtml(text) {
-  // Escape HTML entities first
-  text = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  // Bold **…**
+  text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  // Italic *…*
   text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-  // Split into paragraphs by blank lines
   const paras = text.split(/\n{2,}/);
-  return paras
-    .map(p => p.trim())
-    .filter(Boolean)
-    .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
-    .join('');
+  return paras.map(p => `<p>${p.trim().replace(/\n/g, '<br>')}</p>`).join('');
 }
 
-// ── render messages ───────────────────────────────────────────────────────────
 function render(data) {
   const container = document.getElementById('messages');
   const dropZone  = document.getElementById('drop-zone');
   const noContent = document.getElementById('no-content');
-  const saveBtn   = document.getElementById('btn-save-md');
+  const saveBtn   = document.getElementById('btn-save-all');
   
   container.innerHTML = '';
   dropZone.style.display = 'none';
   saveBtn.style.display = 'block';
 
   const chats = data.data || [];
-  let total = 0;
+  let totalMessages = 0;
 
   chats.forEach((session, i) => {
-    if (chats.length > 1) {
-      const header = document.createElement('div');
-      header.className = 'session-header';
-      header.textContent = `SESSION ${i + 1}`;
-      container.appendChild(header);
-    }
-
     const messages = session.message || [];
+    if (messages.length === 0) return;
+
+    const sessionDiv = document.createElement('div');
+    sessionDiv.className = 'session-container';
+
+    const header = document.createElement('div');
+    header.className = 'session-header';
+    
+    const title = document.createElement('span');
+    title.textContent = `SESSION ${i + 1}`;
+    header.appendChild(title);
+
+    const individualSaveBtn = document.createElement('button');
+    individualSaveBtn.className = 'btn';
+    individualSaveBtn.textContent = '💾 이 세션만 저장';
+    individualSaveBtn.onclick = () => saveSessionMarkdown(i);
+    header.appendChild(individualSaveBtn);
+
+    sessionDiv.appendChild(header);
+
     messages.forEach(msg => {
-      const role    = msg.role || 'user';
-      const raw     = msg.data || '';
-      const content = cleanText(raw);
+      const role = msg.role || 'user';
+      const content = cleanText(msg.data);
       if (!content) return;
 
-      total++;
+      totalMessages++;
       const div = document.createElement('div');
       div.className = `message ${role}`;
-
-      // meta line
-      const time  = msg.time ? new Date(msg.time).toLocaleString('ko-KR') : '';
+      const time = msg.time ? new Date(msg.time).toLocaleString('ko-KR') : '';
       const model = msg.generationInfo?.model || '';
       div.innerHTML = `
         <div class="meta">
@@ -250,53 +251,56 @@ function render(data) {
         </div>
         <div class="content">${toHtml(content)}</div>
       `;
-      container.appendChild(div);
+      sessionDiv.appendChild(div);
     });
+    
+    container.appendChild(sessionDiv);
   });
 
-  document.getElementById('stats').textContent =
-    total ? `${total}개 메시지` : '';
-
-  if (total === 0) {
+  document.getElementById('stats').textContent = `${totalMessages}개 메시지`;
+  if (totalMessages === 0) {
     noContent.style.display = 'block';
     saveBtn.style.display = 'none';
   }
 }
 
-// ── save as markdown ─────────────────────────────────────────────────────────
-function saveAsMarkdown() {
-  if (!currentData) return;
-  
-  const chats = currentData.data || [];
-  let output = "";
+function getSessionMarkdown(index) {
+  const session = currentData.data[index];
+  const messages = session.message || [];
+  return messages.map(msg => cleanText(msg.data)).filter(Boolean).join('\n\n');
+}
 
-  chats.forEach((session, i) => {
-    if (chats.length > 1) {
-      output += `--- SESSION ${i + 1} ---\n\n`;
-    }
-    const messages = session.message || [];
-    messages.forEach(msg => {
-      const role = msg.role || 'user';
-      const content = cleanText(msg.data);
-      if (content) {
-        output += content + "\n\n";
-      }
-    });
-    output += "\n";
-  });
-
-  const blob = new Blob([output.trim()], { type: "text/markdown" });
+function saveSessionMarkdown(index) {
+  const content = getSessionMarkdown(index);
+  const blob = new Blob([content], { type: "text/markdown" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = currentFileName.replace(/\.json$/i, "") + ".md";
-  document.body.appendChild(a);
+  a.download = `${currentFileName.replace(/\.json$/i, "")}_session_${index + 1}.md`;
   a.click();
-  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-// ── file loading ──────────────────────────────────────────────────────────────
+async function saveAllMarkdown() {
+  const zip = new JSZip();
+  const baseName = currentFileName.replace(/\.json$/i, "");
+  
+  currentData.data.forEach((session, i) => {
+    const content = getSessionMarkdown(i);
+    if (content) {
+      zip.file(`${baseName}_session_${i + 1}.md`, content);
+    }
+  });
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${baseName}_all_sessions.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function loadFile(file) {
   currentFileName = file.name;
   document.getElementById('file-title').textContent = file.name;
@@ -306,7 +310,7 @@ function loadFile(file) {
       currentData = JSON.parse(e.target.result);
       render(currentData);
     } catch {
-      alert('JSON 파싱 오류. 올바른 RisuAI 내보내기 파일인지 확인해주세요.');
+      alert('JSON 파싱 오류.');
     }
   };
   reader.readAsText(file, 'utf-8');
@@ -316,18 +320,11 @@ document.getElementById('file-input').addEventListener('change', e => {
   if (e.target.files[0]) loadFile(e.target.files[0]);
 });
 
-// drag & drop
-const dropZone = document.getElementById('drop-zone');
-document.body.addEventListener('dragover', e => {
-  e.preventDefault();
-  dropZone.classList.add('dragover');
-});
-document.body.addEventListener('dragleave', () => {
-  dropZone.classList.remove('dragover');
-});
+document.body.addEventListener('dragover', e => { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); });
+document.body.addEventListener('dragleave', () => document.getElementById('drop-zone').classList.remove('dragover'));
 document.body.addEventListener('drop', e => {
   e.preventDefault();
-  dropZone.classList.remove('dragover');
+  document.getElementById('drop-zone').classList.remove('dragover');
   const file = e.dataTransfer.files[0];
   if (file) loadFile(file);
 });
