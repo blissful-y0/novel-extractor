@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 RisuAI chat JSON → novel-format Markdown converter.
-Enhanced version with multi-session support and tag cleanup.
+Enhanced version with support for both 'risuAllChats' (array) and 'risuChat' (object).
 """
 
 import json
@@ -13,17 +13,15 @@ from pathlib import Path
 
 def clean_tags(text: str) -> str:
     """Remove RisuAI metadata blocks and XML-like tags."""
+    if not isinstance(text, str):
+        return ""
+        
     # Remove <details>…</details> header (non-greedy)
     text = re.sub(r"<details>.*?</details>", "", text, flags=re.DOTALL)
     
-    # Remove XML-like tags (narrative, psyche-status, etc)
-    # We keep the content inside <narrative> but remove the tag itself
+    # Remove XML-like tags (keep narrative content, strip others)
     text = re.sub(r"</?narrative>", "", text)
-    # Remove tags that usually contain metadata or system info
     text = re.sub(r"<(psyche-status|world-info|summary|details)>.*?</\1>", "", text, flags=re.DOTALL)
-    # Generic cleanup for any remaining <tag>...</tag> or <tag/>
-    # (Optional: use if we want to be aggressive)
-    # text = re.sub(r"<[^>]+>.*?</[^>]+>", "", text, flags=re.DOTALL)
     
     # Remove leading --- separator
     text = re.sub(r"^\s*---\s*\n", "", text.lstrip())
@@ -35,7 +33,7 @@ def format_message(role: str, content: str) -> str:
     if role == "char":
         return clean_tags(content)
     else:  # user / human turn
-        return content.strip()
+        return str(content).strip()
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
@@ -47,10 +45,15 @@ def convert(input_path: Path, output_path: Path) -> None:
         print(f"[error] Failed to read/parse JSON: {e}", file=sys.stderr)
         return
 
-    chats = data.get("data", [])
-    if not chats:
+    # Normalize data structure
+    chats = data.get("data")
+    if chats is None:
         print("[warn] No chat data found.", file=sys.stderr)
         return
+        
+    # If it's a single chat (dict), wrap it in a list
+    if isinstance(chats, dict):
+        chats = [chats]
 
     all_output: list[str] = []
 
@@ -80,7 +83,7 @@ def convert(input_path: Path, output_path: Path) -> None:
 
     output_path.write_text(final_text, encoding="utf-8")
     print(f"[ok] Written to: {output_path}")
-    print(f"     {len(chats)} sessions, total message blocks processed.")
+    print(f"     Processed {len(chats)} session(s).")
 
 def main() -> None:
     if len(sys.argv) < 2:

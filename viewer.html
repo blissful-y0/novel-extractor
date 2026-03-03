@@ -164,6 +164,7 @@
 let currentData = null;
 let currentFileName = "";
 let activeIndex = 0;
+let normalizedChats = [];
 
 function cleanText(text) {
   if (!text) return "";
@@ -184,10 +185,9 @@ function toHtml(text) {
 function renderSidebar() {
   const list = document.getElementById('session-list');
   list.innerHTML = '';
-  currentData.data.forEach((session, i) => {
+  normalizedChats.forEach((session, i) => {
     const div = document.createElement('div');
     div.className = `session-item ${i === activeIndex ? 'active' : ''}`;
-    // Get summary or first few words of first message
     const firstMsg = session.message.find(m => m.data)?.data || "";
     const preview = cleanText(firstMsg).substring(0, 30) + "...";
     div.innerHTML = `<div style="font-weight:bold;margin-bottom:4px;">Session ${i + 1}</div><div style="font-size:11px;opacity:0.6;">${preview}</div>`;
@@ -200,7 +200,7 @@ function renderSidebar() {
 function renderActiveSession() {
   const container = document.getElementById('messages');
   container.innerHTML = '';
-  const messages = currentData.data[activeIndex].message || [];
+  const messages = normalizedChats[activeIndex].message || [];
   
   messages.forEach(msg => {
     const role = msg.role || 'user';
@@ -217,7 +217,7 @@ function renderActiveSession() {
 }
 
 function saveActiveSession() {
-  const content = currentData.data[activeIndex].message.map(msg => cleanText(msg.data)).filter(Boolean).join('\n\n');
+  const content = normalizedChats[activeIndex].message.map(msg => cleanText(msg.data)).filter(Boolean).join('\n\n');
   const blob = new Blob([content], { type: "text/markdown" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -229,15 +229,16 @@ function saveActiveSession() {
 
 async function saveAllMarkdown() {
   const zip = new JSZip();
-  currentData.data.forEach((session, i) => {
+  const baseName = currentFileName.replace(/\.json$/i, "");
+  normalizedChats.forEach((session, i) => {
     const content = session.message.map(msg => cleanText(msg.data)).filter(Boolean).join('\n\n');
-    if (content) zip.file(`${currentFileName.replace(/\.json$/i, "")}_session_${i + 1}.md`, content);
+    if (content) zip.file(`${baseName}_session_${i + 1}.md`, content);
   });
   const blob = await zip.generateAsync({ type: "blob" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${currentFileName.replace(/\.json$/i, "")}_all.zip`;
+  a.download = `${baseName}_all.zip`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -248,14 +249,19 @@ function loadFile(file) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      currentData = JSON.parse(e.target.result);
+      const rawData = JSON.parse(e.target.result);
+      // Normalize: single 'risuChat' has data as object, 'risuAllChats' has data as array
+      let chats = rawData.data;
+      if (!chats) throw new Error("No data");
+      normalizedChats = Array.isArray(chats) ? chats : [chats];
+      
       activeIndex = 0;
       document.getElementById('drop-zone').style.display = 'none';
       document.getElementById('btn-save-all').style.display = 'block';
       document.getElementById('btn-save-current').style.display = 'block';
       renderSidebar();
       renderActiveSession();
-    } catch { alert('JSON 파싱 오류.'); }
+    } catch (err) { alert('JSON 파싱 오류: ' + err.message); }
   };
   reader.readAsText(file, 'utf-8');
 }
